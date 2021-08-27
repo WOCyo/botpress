@@ -5,8 +5,6 @@ import _ from 'lodash'
 import { SDK } from '.'
 import { HitlSession, HitlSessionOverview, Message, SessionIdentity } from './typings'
 
-const toBool = s => this.knex.bool.parse(s)
-
 // trims SQL queries from objects
 const toPlainObject = object =>
   _.mapValues(object, v => {
@@ -37,6 +35,7 @@ export default class HitlDb {
         table.timestamp('last_heard_on')
         table.boolean('paused')
         table.string('paused_trigger')
+        table.string('thread_id')
       })
       .then(() => {
         return this.knex.createTableIfNotExists('hitl_messages', function(table) {
@@ -70,11 +69,9 @@ export default class HitlDb {
 
   createUserSession = async (event: sdk.IO.Event) => {
     let profileUrl = undefined
-    let displayName =
-      '#' +
-      Math.random()
-        .toString()
-        .substr(2)
+    let displayName = `# ${Math.random()
+      .toString()
+      .substr(2)}`
 
     const user: sdk.User = (await this.bp.users.getOrCreateUser(event.channel, event.target, event.botId)).result
 
@@ -82,7 +79,7 @@ export default class HitlDb {
       const { first_name, last_name, full_name, profile_pic, picture_url } = user.attributes
 
       profileUrl = profile_pic || picture_url
-      displayName = full_name || (first_name && last_name && first_name + ' ' + last_name) || displayName
+      displayName = full_name || (first_name && last_name && `${first_name} ${last_name}`) || displayName
     }
 
     const session = {
@@ -259,6 +256,7 @@ export default class HitlDb {
   async isSessionPaused(session: SessionIdentity): Promise<boolean> {
     const { botId, channel, userId, sessionId, threadId } = session
 
+    const toBool = s => this.knex.bool.parse(s)
     return this.knex('hitl_sessions')
       .where(sessionId ? { id: sessionId } : { botId, channel, userId, threadId })
       .select('paused')
@@ -288,7 +286,7 @@ export default class HitlDb {
       .where({ botId })
 
     if (onlyPaused) {
-      query = query.whereRaw('hitl_sessions.paused = ' + this.knex.bool.true())
+      query = query.whereRaw(`hitl_sessions.paused = ${this.knex.bool.true()}`)
     }
 
     if (sessionIds) {
@@ -356,11 +354,11 @@ export default class HitlDb {
     if (this.knex.isLite) {
       query.orWhere('attr_fullName', 'like', `%${searchTerm}%`)
       query.select(
-        this.knex.raw(`hitl_sessions.id, json_extract(srv_channel_users.attributes, '$.full_name') as attr_fullName`)
+        this.knex.raw("hitl_sessions.id, json_extract(srv_channel_users.attributes, '$.full_name') as attr_fullName")
       )
     } else {
       query.orWhereRaw(`srv_channel_users.attributes ->>'full_name' like '%${searchTerm}%'`)
-      query.select(this.knex.raw(`hitl_sessions.id`))
+      query.select(this.knex.raw('hitl_sessions.id'))
     }
 
     return query

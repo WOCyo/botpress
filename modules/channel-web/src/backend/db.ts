@@ -9,6 +9,8 @@ import { Config } from '../config'
 
 import { DBMessage } from './typings'
 
+const SEPARATOR = '*'
+
 export default class WebchatDb {
   private readonly MAX_RETRY_ATTEMPTS = 3
   private knex: sdk.KnexExtended
@@ -21,17 +23,16 @@ export default class WebchatDb {
 
   constructor(private bp: typeof sdk) {
     this.users = bp.users
-    this.knex = bp['database'] // TODO Fixme
-
+    this.knex = bp.database
     this.batchSize = this.knex.isLite ? 40 : 2000
 
     setInterval(() => this.flush(), ms('1s'))
   }
 
   flush() {
-    // tslint:disable-next-line: no-floating-promises
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this.flushMessages()
-    // tslint:disable-next-line: no-floating-promises
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this.flushConvoUpdates()
   }
 
@@ -50,7 +51,7 @@ export default class WebchatDb {
         this.batchSize
       )
       .catch(err => {
-        this.bp.logger.attachError(err).error(`Couldn't store messages to the database. Re-queuing elements`)
+        this.bp.logger.attachError(err).error("Couldn't store messages to the database. Re-queuing elements")
         const elementsToRetry = elements
           .map(x => ({ ...x, retry: x.retry ? x.retry + 1 : 1 }))
           .filter(x => x.retry < this.MAX_RETRY_ATTEMPTS)
@@ -71,7 +72,7 @@ export default class WebchatDb {
         const queries = []
 
         for (const key in this.batchedConvos) {
-          const [conversationId, userId, botId] = key.split('_')
+          const [conversationId, userId, botId] = key.split(SEPARATOR)
           const value = this.batchedConvos[key]
 
           const query = this.knex('web_conversations')
@@ -131,6 +132,7 @@ export default class WebchatDb {
           table.string('id').primary()
           table.integer('conversationId')
           table.string('incomingEventId')
+          table.string('eventId')
           table.string('userId')
           table.string('message_type') // @ deprecated Remove in a future release (11.9)
           table.text('message_text') // @ deprecated Remove in a future release (11.9)
@@ -146,7 +148,7 @@ export default class WebchatDb {
       .then(() => {
         // Index creation with where condition is unsupported by knex
         return this.knex.raw(
-          `CREATE INDEX IF NOT EXISTS wmcms_idx ON web_messages ("conversationId", message_type, sent_on DESC) WHERE message_type != 'visit';`
+          'CREATE INDEX IF NOT EXISTS wmcms_idx ON web_messages ("conversationId", message_type, sent_on DESC) WHERE message_type != \'visit\';'
         )
       })
   }
@@ -156,7 +158,7 @@ export default class WebchatDb {
     userId: string,
     conversationId: number,
     payload: any,
-    incomingEventId: string,
+    eventId: string,
     user?: sdk.User
   ) {
     const { fullName, avatar_url } = await this.getUserInfo(userId, user)
@@ -166,7 +168,8 @@ export default class WebchatDb {
     const message: DBMessage = {
       id: uuid.v4(),
       conversationId,
-      incomingEventId,
+      eventId,
+      incomingEventId: eventId,
       userId,
       full_name: fullName,
       avatar_url,
@@ -179,24 +182,32 @@ export default class WebchatDb {
     }
 
     this.batchedMessages.push(message)
-    this.batchedConvos[`${conversationId}_${userId}_${botId}`] = this.knex.date.format(now)
+    this.batchedConvos[`${conversationId}${SEPARATOR}${userId}${SEPARATOR}${botId}`] = this.knex.date.format(now)
 
     return {
       ...message,
       sent_on: now,
       message_raw: raw,
       message_data: data,
-      payload: payload
+      payload
     }
   }
 
-  async appendBotMessage(botName, botAvatar, conversationId, payload, incomingEventId) {
+  async appendBotMessage(
+    botName: string,
+    botAvatar: string,
+    conversationId: number,
+    payload: any,
+    incomingEventId: string,
+    eventId: string
+  ) {
     const { type, text, raw, data } = payload
 
     const now = new Date()
     const message: DBMessage = {
       id: uuid.v4(),
-      conversationId: conversationId,
+      conversationId,
+      eventId,
       incomingEventId,
       userId: undefined,
       full_name: botName,
@@ -216,7 +227,7 @@ export default class WebchatDb {
       sent_on: now,
       message_raw: raw,
       message_data: data,
-      payload: payload
+      payload
     }
   }
 
@@ -308,7 +319,7 @@ export default class WebchatDb {
           .where({ userId, botId })
           .as('wc')
       })
-      .leftJoin(lastMessages.as('wm'), 'wm.conversationId', 'wc.id')
+      .innerJoin(lastMessages.as('wm'), 'wm.conversationId', 'wc.id')
       .orderBy('wm.sent_on', 'desc')
       .select(
         'wc.id',
@@ -323,6 +334,16 @@ export default class WebchatDb {
         this.knex.raw('wm.avatar_url as message_author_avatar'),
         this.knex.raw('wm.sent_on as message_sent_on')
       )
+  }
+
+  async isValidConversationOwner(userId: string, conversationId: number, botId: string): Promise<boolean> {
+    const conversation = await this.knex('web_conversations')
+      .select('id')
+      .where({ userId, botId, id: conversationId })
+      .then()
+      .get(0)
+
+    return conversation?.id === conversationId
   }
 
   async getConversation(userId, conversationId, botId) {
@@ -357,8 +378,18 @@ export default class WebchatDb {
     })
   }
 
+  async deleteConversationMessages(conversationId: number) {
+    return this.knex.transaction(async trx => {
+      // TODO: Delete the related events using bp SDK
+
+      await trx('web_messages')
+        .del()
+        .where({ conversationId })
+    })
+  }
+
   async getConversationMessages(conversationId, limit: number, fromId?: string): Promise<any> {
-    let query = this.knex('web_messages').where({ conversationId: conversationId })
+    let query = this.knex('web_messages').where({ conversationId })
 
     if (fromId) {
       query = query.andWhere('id', '<', fromId)

@@ -51,6 +51,16 @@ It is the only dependency you have to add in your dev-dependencies. It handles t
 
 Then you can build your module using `yarn build`
 
+## Local Development Tips
+
+In order to have code changes automatically recompiled, you need to first run `yarn cmd dev:modules` (run `yarn cmd default` to get full documentation for other useful commands). Restart server to apply backend changes - refresh your browser for UI changes.
+
+Then, you can `cd modules/your-module`, and start a `yarn watch` process in another terminal. This will process will recompile your module's code on the fly.
+
+To regenerate the `config.schema.json` file for your module, you need to run `yarn build` from the module directory.
+
+Once your module is ready to be deployed, from your module's directory, run `yarn build && yarn package`. This will generate a `.tgz` archive containing your compiled module.
+
 ### Overriding webpack options
 
 It is possible to override webpack parameters by adding a "webpack" property to the `package.json` file of your module. When you override a property, you also remove the default settings that we've set, so we recommend adding them back when overriding. For example, if you'd like to add an additional external file:
@@ -498,3 +508,17 @@ They are then accessible by the name `$MY_MODULE/$MY_ACTION` in any node or skil
 If your action requires external dependencies, you must add them on your module's `package.json` as dependencies. When the VM is initialized, we redirect `require` requests to the node_modules of its parent module.
 
 > Many dependencies are already included with Botpress and do not need to be added to your package (ex: lodash, axios, etc... )
+
+## module-builder Docker image
+
+We provide a Docker image that can be used to compile your custom module. This is useful in CI/CD situations, where your pipeline will checkout your Custom Module's source code, and the Docker container will spit out a compiled `.tgz` file.
+
+## Instructions
+
+In the instructions beloew, replace `vX_X_X` by the latest version of the Docker image available on Docker Hub:
+
+```
+docker run -v `pwd`/your-custom-module:/botpress/modules/your-custom-module botpress/module-builder:vX_X_X sh -c 'cd modules/your-custom-module && yarn && yarn build && yarn package'
+```
+
+The compiled module will be availble in the directory you mounted as a `your-custom-module.tgz` file.

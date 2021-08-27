@@ -8,9 +8,9 @@ import React from 'react'
 
 import { ApiFlaggedEvent } from '../../../types'
 
-import style from './style.scss'
 import ApiClient from './NLUApiClient'
 import Pager from './Pager'
+import style from './style.scss'
 import VariationsOverlay from './VariationsOverlay'
 
 const ITEMS_PER_PAGE = 5
@@ -193,7 +193,7 @@ class IntentPicker extends React.Component<Props, State> {
         {utterances[0] && (
           <p>
             U:&nbsp;{utterances[0]}&nbsp;
-            <VariationsOverlay elements={utterances} />
+            <VariationsOverlay elements={utterances} axios={this.props.axios} language={this.props.language} />
           </p>
         )}
 

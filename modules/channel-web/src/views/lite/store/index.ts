@@ -1,4 +1,5 @@
 import isBefore from 'date-fns/is_before'
+import isValid from 'date-fns/is_valid'
 import merge from 'lodash/merge'
 import { action, computed, observable, runInAction } from 'mobx'
 import ms from 'ms'
@@ -18,7 +19,7 @@ import {
   QueuedMessage,
   StudioConnector
 } from '../typings'
-import { downloadFile, trackMessage } from '../utils'
+import { downloadFile, isRTLLocale, trackMessage } from '../utils'
 
 import ComposerStore from './composer'
 import ViewStore from './view'
@@ -74,6 +75,7 @@ class RootStore {
   constructor({ fullscreen }) {
     this.composer = new ComposerStore(this)
     this.view = new ViewStore(this, fullscreen)
+    this.updateBotUILanguage(chosenLocale)
   }
 
   @action.bound
@@ -103,7 +105,16 @@ class RootStore {
 
   @computed
   get botAvatarUrl(): string {
-    return this.botInfo?.details?.avatarUrl || this.config?.avatarUrl
+    return (
+      this.botInfo?.details?.avatarUrl ||
+      this.config?.avatarUrl ||
+      (this.config.isEmulator && `${window.ROOT_PATH}/assets/modules/channel-web/images/emulator-default.svg`)
+    )
+  }
+
+  @computed
+  get rtl(): boolean {
+    return isRTLLocale(this.preferredLanguage)
   }
 
   @computed
@@ -122,16 +133,51 @@ class RootStore {
   }
 
   @action.bound
+  postMessage(name: string, payload?: any) {
+    const chatId = this.config.chatId
+    window.parent.postMessage({ name, chatId, payload }, '*')
+  }
+
+  @action.bound
   updateMessages(messages) {
     this.currentConversation.messages = messages
   }
 
   @action.bound
+  clearMessages() {
+    this.currentConversation.messages = []
+  }
+
+  @action.bound
+  async deleteConversation(): Promise<void> {
+    if (this.currentConversation !== undefined && this.currentConversation.messages.length > 0) {
+      await this.api.deleteMessages(this.currentConversationId)
+
+      this.clearMessages()
+    }
+  }
+
+  @action.bound
+  loadEventInDebugger(eventId: string, isManual?: boolean): void {
+    if (!this.config.isEmulator || !eventId) {
+      return
+    }
+
+    this.view.setHighlightedMessages([eventId])
+    window.parent.postMessage({ action: 'load-event', payload: { eventId, isManual } }, '*')
+  }
+
+  @action.bound
   async addEventToConversation(event: Message): Promise<void> {
-    if (this.currentConversationId !== Number(event.conversationId)) {
+    if (this.isInitialized && this.currentConversationId !== Number(event.conversationId)) {
       await this.fetchConversations()
       await this.fetchConversation(Number(event.conversationId))
       return
+    }
+
+    // Autoplay bot voice messages
+    if (event.payload?.type === 'voice' && !event.userId) {
+      event.payload.autoPlay = true
     }
 
     const message: Message = { ...event, conversationId: +event.conversationId }
@@ -144,7 +190,7 @@ class RootStore {
 
   @action.bound
   async updateTyping(event: Message): Promise<void> {
-    if (this.currentConversationId !== Number(event.conversationId)) {
+    if (this.isInitialized && this.currentConversationId !== Number(event.conversationId)) {
       await this.fetchConversations()
       await this.fetchConversation(Number(event.conversationId))
       return
@@ -166,6 +212,7 @@ class RootStore {
       await this.fetchConversation(this.config.conversationId)
       runInAction('-> setInitialized', () => {
         this.isInitialized = true
+        this.postMessage('webchatReady')
       })
     } catch (err) {
       console.error('Error while fetching data, creating new convo...', err)
@@ -182,14 +229,20 @@ class RootStore {
     runInAction('-> setBotInfo', () => {
       this.botInfo = botInfo
     })
-    this.mergeConfig({ extraStylesheet: botInfo.extraStylesheet })
+    this.mergeConfig({
+      extraStylesheet: botInfo.extraStylesheet,
+      disableNotificationSound: botInfo.disableNotificationSound
+    })
   }
 
   @action.bound
   async fetchPreferences(): Promise<void> {
     const preferences = await this.api.fetchPreferences()
+    if (!preferences.language) {
+      return
+    }
     runInAction('-> setPreferredLanguage', () => {
-      this.preferredLanguage = preferences.language
+      this.updateBotUILanguage(preferences.language)
     })
   }
 
@@ -211,14 +264,16 @@ class RootStore {
 
   /** Fetch the specified conversation ID, or try to fetch a valid one from the list */
   @action.bound
-  async fetchConversation(convoId?: number): Promise<void> {
+  async fetchConversation(convoId?: number): Promise<number> {
     const conversationId = convoId || this._getCurrentConvoId()
     if (!conversationId) {
       return this.createConversation()
     }
 
     const conversation: CurrentConversation = await this.api.fetchConversation(convoId || this._getCurrentConvoId())
-    await this.extractFeedback(conversation && conversation.messages)
+    if (conversation?.messages) {
+      await this.extractFeedback(conversation.messages)
+    }
 
     runInAction('-> setConversation', () => {
       this.currentConversation = conversation
@@ -238,11 +293,16 @@ class RootStore {
       return
     }
 
-    await this.sendData({ type: 'text', text: userMessage })
-    trackMessage('sent')
-
-    this.composer.addMessageToHistory(userMessage)
     this.composer.updateMessage('')
+    try {
+      await this.sendData({ type: 'text', text: userMessage })
+      trackMessage('sent')
+
+      this.composer.addMessageToHistory(userMessage)
+    } catch (e) {
+      this.composer.updateMessage(userMessage)
+      throw e
+    }
   }
 
   /** Sends an event to start conversation & hide the bot info page */
@@ -254,10 +314,11 @@ class RootStore {
 
   /** Creates a new conversation and switches to it */
   @action.bound
-  async createConversation(): Promise<void> {
+  async createConversation(): Promise<number> {
     const newId = await this.api.createConversation()
     await this.fetchConversations()
     await this.fetchConversation(newId)
+    return newId
   }
 
   @action.bound
@@ -272,6 +333,8 @@ class RootStore {
 
   @action.bound
   async resetSession(): Promise<void> {
+    this.composer.setLocked(false)
+
     return this.api.resetSession(this.currentConversationId)
   }
 
@@ -280,7 +343,7 @@ class RootStore {
     await this.sendData({
       type: 'visit',
       text: 'User visit',
-      timezone: new Date().getTimezoneOffset() / 60,
+      timezone: -(new Date().getTimezoneOffset() / 60), // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTimezoneOffset#description
       language: getUserLocale()
     })
   }
@@ -324,10 +387,13 @@ class RootStore {
 
   @action.bound
   async uploadFile(title: string, payload: string, file: File): Promise<void> {
-    const data = new FormData()
-    data.append('file', file)
+    await this.api.uploadFile(file, payload, this.currentConversationId)
+  }
 
-    await this.api.uploadFile(data, this.currentConversationId)
+  /** Sends a message of type voice */
+  @action.bound
+  async sendVoiceMessage(voice: Buffer, ext: string): Promise<void> {
+    return this.api.sendVoiceMessage(voice, ext, this.currentConversationId)
   }
 
   /** Use this method to replace a value or add a new config */
@@ -370,13 +436,21 @@ class RootStore {
 
     this.api.updateAxiosConfig({ botId: this.config.botId, externalAuthToken: this.config.externalAuthToken })
     this.api.updateUserId(this.config.userId)
+    this.publishConfigChanged()
   }
 
   /** When this method is used, the user ID is changed in the configuration, then the socket is updated */
   @action.bound
   setUserId(userId: string): void {
     this.config.userId = userId
+    this.resetConversation()
     this.api.updateUserId(userId)
+    this.publishConfigChanged()
+  }
+
+  @action.bound
+  publishConfigChanged() {
+    this.postMessage('configChanged', JSON.stringify(this.config, undefined, 2))
   }
 
   @action.bound
@@ -400,7 +474,7 @@ class RootStore {
 
     this._typingInterval = setInterval(() => {
       const typeUntil = new Date(this.currentConversation && this.currentConversation.typingUntil)
-      if (!typeUntil || isBefore(typeUntil, new Date())) {
+      if (!typeUntil || !isValid(typeUntil) || isBefore(typeUntil, new Date())) {
         this._expireTyping()
       } else {
         this.emptyDelayedMessagesQueue(false)
@@ -420,8 +494,10 @@ class RootStore {
 
   @action.bound
   updateBotUILanguage(lang: string): void {
+    lang = getUserLocale(lang) // Ensure language is supported
     runInAction('-> setBotUILanguage', () => {
       this.botUILanguage = lang
+      this.preferredLanguage = lang
       window.BP_STORAGE?.set('bp/channel-web/user-lang', lang)
     })
   }

@@ -80,6 +80,13 @@ class ViewStore {
   }
 
   @computed
+  get showDeleteConversationButton() {
+    return (
+      !this.isConversationsDisplayed && !this.isBotInfoDisplayed && this.rootStore.config.enableConversationDeletion
+    )
+  }
+
+  @computed
   get showResetButton() {
     return !this.isConversationsDisplayed && !this.isBotInfoDisplayed && this.rootStore.config?.enableReset
   }
@@ -147,13 +154,6 @@ class ViewStore {
     }
   }
 
-  /* tslint:disable:prefer-function-over-method */
-  @action.bound
-  postMessage(name: string) {
-    window.parent.postMessage({ name }, '*')
-  }
-  /* tslint:enable:prefer-function-over-method */
-
   @action.bound
   incrementUnread() {
     this.unreadCount++
@@ -187,7 +187,7 @@ class ViewStore {
   @action.bound
   setLoadingCompleted() {
     this._isLoading = false
-    this.postMessage('webchatLoaded')
+    this.rootStore.postMessage('webchatLoaded')
   }
 
   @action.bound
@@ -260,7 +260,7 @@ class ViewStore {
   showChat() {
     if (this.disableAnimations) {
       this.activeView = 'side'
-      this.postMessage('webchatOpened')
+      this.rootStore.postMessage('webchatOpened')
       return this._updateTransitions({ widgetTransition: undefined, sideTransition: 'none' })
     }
 
@@ -272,7 +272,7 @@ class ViewStore {
 
     this._endAnimation('side')
 
-    this.postMessage('webchatOpened')
+    this.rootStore.postMessage('webchatOpened')
   }
 
   @action.bound
@@ -283,7 +283,7 @@ class ViewStore {
 
     if (this.disableAnimations) {
       this.activeView = 'widget'
-      this.postMessage('webchatClosed')
+      this.rootStore.postMessage('webchatClosed')
       return this._updateTransitions({ widgetTransition: undefined, sideTransition: undefined })
     }
 
@@ -297,7 +297,7 @@ class ViewStore {
 
     this._endAnimation('widget')
 
-    this.postMessage('webchatClosed')
+    this.rootStore.postMessage('webchatClosed')
   }
 
   @action.bound

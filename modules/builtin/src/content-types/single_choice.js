@@ -1,4 +1,5 @@
 const base = require('./_base')
+const utils = require('./_utils')
 
 function render(data) {
   const events = []
@@ -10,6 +11,22 @@ function render(data) {
     })
   }
 
+  if (data.isDropdown) {
+    return [
+      ...events,
+      {
+        type: 'custom',
+        module: 'extensions',
+        component: 'Dropdown',
+        message: data.text,
+        buttonText: '',
+        displayInKeyboard: true,
+        options: data.choices.map(c => ({ label: c.title, value: c.value.toUpperCase() })),
+        placeholderText: data.dropdownPlaceholder
+      }
+    ]
+  }
+
   return [
     ...events,
     {
@@ -19,72 +36,19 @@ function render(data) {
         payload: c.value.toUpperCase()
       })),
       typing: data.typing,
-      markdown: data.markdown
-    }
-  ]
-}
-
-function renderMessenger(data) {
-  const events = []
-
-  if (data.typing) {
-    events.push({
-      type: 'typing',
-      value: data.typing
-    })
-  }
-
-  return [
-    ...events,
-    {
-      text: data.text,
-      quick_replies: data.choices.map(c => ({
-        content_type: 'text',
-        title: c.title,
-        payload: c.value.toUpperCase()
-      }))
-    }
-  ]
-}
-
-function renderSlack(data) {
-  const events = []
-
-  if (data.typing) {
-    events.push({
-      type: 'typing',
-      value: data.typing
-    })
-  }
-
-  return [
-    ...events,
-    {
-      text: data.text,
-      quick_replies: {
-        type: 'actions',
-        elements: data.choices.map((q, idx) => ({
-          type: 'button',
-          action_id: 'replace_buttons' + idx,
-          text: {
-            type: 'plain_text',
-            text: q.title
-          },
-          value: q.value.toUpperCase()
-        }))
-      }
+      markdown: data.markdown,
+      disableFreeText: data.disableFreeText
     }
   ]
 }
 
 function renderElement(data, channel) {
-  if (channel === 'messenger') {
-    return renderMessenger(data)
-  } else if (channel === 'slack') {
-    return renderSlack(data)
-  } else {
-    return render(data)
+  // These channels now use channel renderers
+  if (['telegram', 'twilio', 'slack', 'smooch', 'vonage', 'teams', 'messenger'].includes(channel)) {
+    return utils.extractPayload('single-choice', data)
   }
+
+  return render(data)
 }
 
 module.exports = {
@@ -100,6 +64,15 @@ module.exports = {
       text: {
         type: 'string',
         title: 'message'
+      },
+      isDropdown: {
+        type: 'boolean',
+        title: 'Show as a dropdown'
+      },
+      dropdownPlaceholder: {
+        type: 'string',
+        title: 'Dropdown placeholder',
+        default: 'Select...'
       },
       choices: {
         type: 'array',
@@ -123,10 +96,11 @@ module.exports = {
           }
         }
       },
-      markdown: {
+      ...base.useMarkdown,
+      disableFreeText: {
         type: 'boolean',
-        title: 'module.builtin.useMarkdown',
-        default: true
+        title: 'module.builtin.disableFreeText',
+        default: false
       },
       ...base.typingIndicators
     }
@@ -134,7 +108,8 @@ module.exports = {
 
   uiSchema: {
     text: {
-      'ui:field': 'i18n_field'
+      'ui:field': 'i18n_field',
+      $subtype: 'textarea'
     },
     choices: {
       'ui:field': 'i18n_array'

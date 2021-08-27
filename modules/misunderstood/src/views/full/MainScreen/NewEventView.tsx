@@ -1,16 +1,15 @@
 import { Button, ButtonGroup, Intent } from '@blueprintjs/core'
 import { AxiosStatic } from 'axios'
-import { lang } from 'botpress/shared'
-import { SplashScreen } from 'botpress/ui'
+import { lang, ModuleUI } from 'botpress/shared'
 import pick from 'lodash/pick'
 import React from 'react'
 
 import { ApiFlaggedEvent, ResolutionData, RESOLUTION_TYPE } from '../../../types'
 import StickyActionBar from '../StickyActionBar'
 
-import style from './style.scss'
 import AmendForm from './AmendForm'
 import ChatPreview from './ChatPreview'
+import style from './style.scss'
 
 interface Props {
   axios: AxiosStatic
@@ -22,6 +21,7 @@ interface Props {
   skipEvent: () => void
   deleteEvent: () => void
   amendEvent: (resolutionData: ResolutionData) => void
+  manyEventsSelected: boolean
 }
 
 interface State {
@@ -30,6 +30,8 @@ interface State {
   resolution: string | null
   resolutionParams: string | object | null
 }
+
+const { SplashScreen } = ModuleUI
 
 class NewEventView extends React.Component<Props, State> {
   state = {
@@ -70,12 +72,22 @@ class NewEventView extends React.Component<Props, State> {
   }
 
   render() {
-    const { axios, language, event, totalEventsCount, eventIndex, skipEvent, deleteEvent, eventNotFound } = this.props
+    const {
+      axios,
+      language,
+      event,
+      totalEventsCount,
+      eventIndex,
+      skipEvent,
+      deleteEvent,
+      eventNotFound,
+      manyEventsSelected
+    } = this.props
     const { isAmending, resolutionType, resolution, resolutionParams } = this.state
 
     return (
       <>
-        <h3>{lang.tr('module.misunderstood.newMisunderstood', { eventIndex, totalEventsCount })}</h3>
+        <h3>{lang.tr('module.misunderstood.newMisunderstood', { eventIndex: eventIndex + 1, totalEventsCount })}</h3>
 
         {!isAmending && (
           <>
@@ -96,11 +108,16 @@ class NewEventView extends React.Component<Props, State> {
                 onClick={skipEvent}
                 icon="arrow-right"
                 intent={Intent.WARNING}
-                disabled={isAmending || eventIndex === totalEventsCount - 1}
+                disabled={isAmending || eventIndex === totalEventsCount - 1 || manyEventsSelected}
               >
                 {lang.tr('module.misunderstood.skip')}
               </Button>
-              <Button onClick={this.startAmend} icon="confirm" intent={Intent.PRIMARY} disabled={isAmending}>
+              <Button
+                onClick={this.startAmend}
+                icon="confirm"
+                intent={Intent.PRIMARY}
+                disabled={isAmending || manyEventsSelected}
+              >
                 {lang.tr('module.misunderstood.amend')}
               </Button>
             </StickyActionBar>

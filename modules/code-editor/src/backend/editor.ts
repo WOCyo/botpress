@@ -97,17 +97,22 @@ export default class Editor {
 
   async loadFiles(fileTypeId: string, botId?: string, listBuiltin?: boolean): Promise<EditableFile[]> {
     const def: FileDefinition = FileTypes[fileTypeId]
-    const { baseDir, dirListingAddFields } = def.ghost
+    const { baseDir, dirListingAddFields, dirListingExcluded } = def.ghost
 
     if ((!def.allowGlobal && !botId) || (!def.allowScoped && botId)) {
       return []
     }
 
-    const excluded = this._config.includeBuiltin || listBuiltin ? undefined : getBuiltinExclusion()
+    let fileExt = '*.*'
+    if (def.isJSON !== undefined) {
+      fileExt = def.isJSON ? '*.json' : '*.js'
+    }
+
+    const baseExcluded = this._config.includeBuiltin || listBuiltin ? undefined : getBuiltinExclusion()
+    const excluded = [...baseExcluded, ...(dirListingExcluded ?? [])]
+
     const ghost = botId ? this.bp.ghost.forBot(botId) : this.bp.ghost.forGlobal()
-    const files = def.filenames
-      ? def.filenames
-      : await ghost.directoryListing(baseDir, def.isJSON ? '*.json' : '*.js', excluded, true)
+    const files = def.filenames ? def.filenames : await ghost.directoryListing(baseDir, fileExt, excluded, true)
 
     return Promise.map(files, async (filepath: string) => ({
       name: path.basename(filepath),
@@ -179,7 +184,7 @@ export default class Editor {
 
       fileContent = typings.toString()
       if (name === 'botpress.d.ts') {
-        fileContent = fileContent.replace(`'botpress/sdk'`, `sdk`)
+        fileContent = fileContent.replace("'botpress/sdk'", 'sdk')
       }
     } catch (err) {
       this.bp.logger.warn(`Couldn't load file ${filePath} `)
@@ -200,7 +205,7 @@ export default class Editor {
     const moduleTypings = await this.getModuleTypings()
 
     const files = [
-      { name: 'node.d.ts', location: path.join(__dirname, `/../typings/node.d.txt`) },
+      { name: 'node.d.ts', location: path.join(__dirname, '/../typings/node.d.txt') },
       { name: 'botpress.d.ts', location: path.join(__dirname, '/../botpress.d.js') },
       // Required so array.includes() can be used without displaying an error
       { name: 'es6include.d.ts', location: path.join(__dirname, '/../typings/es6include.txt') }

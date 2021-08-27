@@ -1,60 +1,84 @@
 {
   "docs": {
-    "Release Notes": ["releases/migrate", "releases/release-notes", "releases/v12_10_0"],
-    "Getting Started": ["introduction", "installation", "quickstart", "updating", "troubleshoot"],
-    "Main Concepts": [
-      "main/overview",
-      "main/glossary",
+    "Release Notes": ["releases/migrate"],
+    "Getting Started": ["introduction", "installation", "quickstart"],
+    "Building A Chatbot": [
+      "main/overview2",
       "main/content",
       "main/dialog",
-      "main/code",
       "main/memory",
+      "main/emulator",
+      "main/qna-module",
+      "main/code",
       "main/module",
       "main/nlu",
-      "main/emulator"
+      "main/broadcast",
+      "main/glossary"
     ],
-    "Advanced Guides": [
-      "advanced/debug",
-      "advanced/configuration",
-      "advanced/authentication",
-      "advanced/custom-module",
-      "advanced/performances",
-      "advanced/hosting",
-      "advanced/versions",
-      "advanced/development-pipeline",
-      "advanced/cluster"
+    "Natural Language Understanding": [
+      "nlu/intro-nlu",
+      "nlu/intent-matching",
+      "nlu/entity-extraction",
+      "nlu/skill-slot",
+      "nlu/improvement",
+      "nlu/3rd-party-NLU",
+      "nlu/i18n"
     ],
     "Channels": [
       "channels/web",
+      "channels/converse",
       "channels/messenger",
       "channels/telegram",
       "channels/teams",
-      "channels/converse",
+      "channels/twilio",
       "channels/slack",
       "channels/smooch",
+      "channels/vonage",
       "channels/faq"
     ],
-    "Tutorials": [
-      "tutorials/cluster-digital-ocean",
-      "tutorials/intent-matching",
-      "tutorials/proactive",
-      "tutorials/carousel-postback",
-      "tutorials/skill-slot",
-      "tutorials/skill-call-api",
-      "tutorials/external-api",
-      "tutorials/shortlinks",
-      "tutorials/existing-backend",
-      "tutorials/database",
-      "tutorials/timeouts",
-      "tutorials/hitl",
-      "tutorials/jump-to",
-      "tutorials/interbot",
-      "tutorials/contextual-faq",
-      "tutorials/chat-3rd-party-OAuth",
-      "tutorials/listen-file-changes",
-      "tutorials/3rd-party-NLU",
-      "tutorials/uipath"
+    "Deployment And Infrastructure": [
+      "infrastructure/deploying",
+      "infrastructure/hosting",
+      "infrastructure/database",
+      "infrastructure/aws",
+      "infrastructure/docker",
+      "infrastructure/performances",
+      "infrastructure/pipeline",
+      "infrastructure/versions",
+      "infrastructure/cluster",
+      "infrastructure/digital-ocean"
     ],
-    "Pro Edition": ["pro/about-pro", "pro/licensing", "pro/rbac", "pro/monitoring", "pro/pipelines", "pro/i18n"]
+    "Managing Bots & Users": [
+      "managing/rbac",
+      "managing/authentication",
+      "managing/ssotools",
+      "managing/user-auth",
+      "managing/monitoring",
+      "managing/proactive",
+      "managing/hitl",
+      "managing/hitlnext",
+      "managing/features"
+    ],
+    "Integrating External Services": [
+      "integrating/skill-call-api",
+      "integrating/external-api",
+      "integrating/existing-backend",
+      "integrating/uipath"
+    ],
+    "Improving Your Chatbot": [
+      "tutorials/carousel-postback",
+      "tutorials/skill-email",
+      "tutorials/timeouts",
+      "tutorials/jump-to",
+      "tutorials/contextual-faq"
+    ],
+    "Pro Edition": ["pro/about-pro", "pro/licensing"],
+    "Advanced Guides": [
+      "advanced/debug",
+      "advanced/authentication",
+      "advanced/configuration",
+      "advanced/custom-module",
+      "advanced/development-pipeline"
+    ]
   }
 }

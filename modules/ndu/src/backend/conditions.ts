@@ -30,7 +30,7 @@ export const dialogConditions: sdk.Condition[] = [
         label: 'Language',
         type: 'list',
         list: {
-          endpoint: 'API_PATH/admin/languages',
+          endpoint: 'API_PATH/admin/management/languages',
           path: 'installed',
           valueField: 'lang',
           labelField: 'name'
@@ -57,7 +57,7 @@ export const dialogConditions: sdk.Condition[] = [
         label: 'Name of the topic',
         type: 'list',
         list: {
-          endpoint: 'BOT_API_PATH/topics',
+          endpoint: 'STUDIO_API_PATH/topics',
           valueField: 'name',
           labelField: 'name'
         }
